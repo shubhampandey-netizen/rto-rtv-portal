@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>e-Invoice JSON — Nexxbase</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#16232b;
+    --paper:#f6f4ee;
+    --line:#c9c2b3;
+    --brass:#8a6d3b;
+    --stamp:#2f5d4f;
+    --stamp-bg:#e7efe9;
+    --danger:#9a3324;
+    --danger-bg:#f5e6e2;
+    --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); line-height:1.5; font-size:15px;
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:40px 24px 80px;}
+
+  header{border-bottom:2px solid var(--ink); padding-bottom:20px; margin-bottom:32px;}
+  header .mark{
+    display:flex; align-items:baseline; gap:10px; margin-bottom:6px;
+  }
+  header .mark .no{font-family:var(--mono); font-size:13px; color:var(--brass); letter-spacing:.02em;}
+  h1{font-size:26px; font-weight:600; margin:0; letter-spacing:-0.01em;}
+  header p{margin:8px 0 0; color:#5a5049; max-width:60ch;}
+
+  .notice{
+    border:1px solid var(--line); background:#fff; padding:14px 16px;
+    border-radius:2px; font-size:13.5px; color:#4a4038; margin-bottom:32px;
+  }
+  .notice b{color:var(--ink);}
+
+  section{margin-bottom:40px;}
+  .sec-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;}
+  .sec-head h2{font-size:16px; margin:0; font-weight:600;}
+  .sec-head .hint{font-size:12.5px; color:#8a7f72; font-family:var(--mono);}
+
+  .profile-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px 16px;
+    background:#fff; border:1px solid var(--line); padding:18px; border-radius:2px;
+  }
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:11.5px; color:#8a7f72; font-family:var(--mono);}
+  .field input{
+    font-family:var(--mono); font-size:13.5px; padding:7px 9px;
+    border:1px solid var(--line); border-radius:2px; background:var(--paper); color:var(--ink);
+  }
+  .field input:focus{outline:2px solid var(--stamp); outline-offset:1px; background:#fff;}
+
+  .opt{display:flex; gap:8px; align-items:flex-start; margin-top:12px; font-size:13px; color:#4a4038;}
+  .opt input{margin-top:3px;}
+  .dropzones{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .drop{
+    border:1.5px dashed var(--line); border-radius:3px; padding:24px 18px;
+    background:#fff; text-align:center; cursor:pointer; position:relative;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--stamp); background:var(--stamp-bg);}
+  .drop input{position:absolute; inset:0; opacity:0; cursor:pointer;}
+  .drop .kind{font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--brass); margin-bottom:6px;}
+  .drop .title{font-weight:600; font-size:14.5px;}
+  .drop .sub{font-size:12.5px; color:#8a7f72; margin-top:4px;}
+  .drop .filename{margin-top:10px; font-family:var(--mono); font-size:12px; color:var(--stamp); word-break:break-all;}
+
+  table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line);}
+  th, td{padding:9px 10px; text-align:left; border-bottom:1px solid var(--line); font-size:13px;}
+  th{font-family:var(--mono); font-weight:500; font-size:11px; color:#8a7f72; text-transform:none; background:var(--paper);}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num{font-family:var(--mono); text-align:right;}
+  td.tag{font-family:var(--mono); font-size:11.5px;}
+  .tag.b2b{color:var(--stamp);}
+  .tag.exp{color:var(--brass);}
+
+  .row-actions{display:flex; gap:8px; align-items:center;}
+  button{
+    font-family:var(--sans); font-size:13px; font-weight:500; cursor:pointer;
+    border-radius:2px; border:1px solid var(--ink); background:var(--ink); color:var(--paper);
+    padding:7px 14px;
+  }
+  button.ghost{background:#fff; color:var(--ink);}
+  button.small{padding:4px 10px; font-size:12px;}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  button:hover:not(:disabled){opacity:.85;}
+
+  .bulk-actions{display:flex; gap:10px; margin-top:14px;}
+
+  .issues{margin-top:10px;}
+  .issue{
+    display:flex; gap:8px; align-items:flex-start; font-size:12.5px;
+    background:var(--danger-bg); color:var(--danger); border:1px solid #e0bdb3;
+    padding:8px 10px; border-radius:2px; margin-bottom:6px;
+  }
+  .issue:before{content:"!"; font-family:var(--mono); font-weight:600; flex-shrink:0;}
+
+  .empty{
+    border:1px dashed var(--line); border-radius:3px; padding:28px; text-align:center;
+    color:#8a7f72; font-size:13px;
+  }
+
+  footer{border-top:1px solid var(--line); padding-top:18px; margin-top:48px; font-size:12px; color:#8a7f72;}
+  footer a{color:var(--stamp);}
+
+  @media (max-width: 680px){
+    .profile-grid, .dropzones{grid-template-columns:1fr;}
+    table{font-size:12px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="mark">
+      <span class="no">FORM · e-INVOICE JSON</span>
+    </div>
+    <h1>Tally sales → e-Invoice JSON</h1>
+    <p>Upload a Tally sales export. Domestic (B2B) and export (EXPWOP) invoices are built into the official e-invoice JSON schema, right in your browser — nothing is uploaded anywhere.</p>
+  </header>
+
+  <div class="notice">
+    <b>Verification status:</b> domestic output has been diffed field-by-field against a JSON from the official offline tool (taxable value truncation, tax rounding, whole-rupee invoice totals, address formatting, array wrapper). <b>Export output has not yet been compared to an official export JSON</b> — and neither has been round-tripped through the IRP. Validate your first real batch on the GST sandbox before filing.
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>Your details (seller)</h2>
+      <span class="hint">filled once, used for every invoice</span>
+    </div>
+    <div class="profile-grid">
+      <div class="field"><label>GSTIN</label><input id="s-gstin" value="06AADCN0946N1Z8"></div>
+      <div class="field"><label>Legal name</label><input id="s-legal" value="NEXXBASE MARKETING PRIVATE LIMITED"></div>
+      <div class="field"><label>Address line 1</label><input id="s-addr1" value="KHASRA No. 146/25/2/1, Jail Road"></div>
+      <div class="field"><label>Location / city</label><input id="s-loc" value="Gurgaon"></div>
+      <div class="field"><label>State</label><input id="s-state" value="Haryana"></div>
+      <div class="field"><label>Pin code</label><input id="s-pin" value="122101"></div>
+    </div>
+    <label class="opt"><input type="checkbox" id="opt-daterule" checked>
+      Date rule: if an invoice is older than 30 days, date it <b>today − 29 days</b>; otherwise keep the original date
+    </label>
+    <div class="field" style="margin-top:14px;">
+      <label>Export buyer address book — one per line: Customer name => billing address (saved in this browser)</label>
+      <textarea id="addr-book" rows="3" style="font-family:var(--mono);font-size:12.5px;padding:8px 9px;border:1px solid var(--line);border-radius:2px;background:var(--paper);color:var(--ink);">Nexxbase Technologies Inc. => 8 THE GREEN, STE A, DOVER, KENT, DELAWARE, United States</textarea>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Upload Tally exports</h2>
+      <span class="hint">.xlsx</span>
+    </div>
+    <div class="dropzones">
+      <label class="drop" id="drop-domestic">
+        <div class="kind">DOMESTIC · B2B</div>
+        <div class="title">Domestic sales file</div>
+        <div class="sub">Buyer GSTIN, real state → CGST+SGST or IGST</div>
+        <div class="filename" id="fn-domestic"></div>
+        <input type="file" id="file-domestic" accept=".xlsx,.xls">
+      </label>
+      <label class="drop" id="drop-export">
+        <div class="kind">EXPORT · EXPWOP</div>
+        <div class="title">Export sales file</div>
+        <div class="sub">Foreign buyer, zero-rated under LUT</div>
+        <div class="filename" id="fn-export"></div>
+        <input type="file" id="file-export" accept=".xlsx,.xls">
+      </label>
+    </div>
+  </section>
+
+  <section id="results-section" style="display:none;">
+    <div class="sec-head">
+      <h2>Invoices</h2>
+      <span class="hint" id="results-count"></span>
+    </div>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th>Invoice #</th><th>Type</th><th>Date</th><th>Buyer</th>
+          <th class="num">Taxable</th><th class="num">Tax</th><th class="num">Total</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+    <div class="issues" id="issues"></div>
+    <div class="bulk-actions">
+      <button id="download-all">Download all JSON (combined array)</button>
+      <button class="ghost" id="download-zip-note" disabled>Individual files: use the row buttons ↑</button>
+    </div>
+  </section>
+
+  <section id="empty-section">
+    <div class="empty">Upload a domestic or export file above to see invoices here.</div>
+  </section>
+
+  <footer>
+    Runs entirely client-side — your files never leave this browser tab.
+    Seller state code and unit codes follow the CBIC GST master lists.
+    Schema: e-invoice v1.1 (<a href="https://einvoice1.gst.gov.in" target="_blank">einvoice1.gst.gov.in</a>).
+  </footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// Reference data
+// ---------------------------------------------------------------------
+const STATE_NUM = {
+  JK:"01",HP:"02",PB:"03",CH:"04",UK:"05",UT:"05",HR:"06",DL:"07",RJ:"08",UP:"09",
+  BR:"10",SK:"11",AR:"12",NL:"13",MN:"14",MZ:"15",TR:"16",ML:"17",AS:"18",WB:"19",
+  JH:"20",OR:"21",OD:"21",CT:"22",CG:"22",MP:"23",GJ:"24",DD:"26",DN:"26",MH:"27",
+  KA:"29",GA:"30",LD:"31",KL:"32",TN:"33",PY:"34",AN:"35",TS:"36",AP:"37",LA:"38",
+};
+const UNIT_CODE = {
+  BAGS:"BAG",BALE:"BAL",BUNDLES:"BDL",BUCKLES:"BKL","BILLION OF UNITS":"BOU",BOX:"BOX",
+  BOTTLES:"BTL",BUNCHES:"BUN",CANS:"CAN","CUBIC METERS":"CBM","CUBIC CENTIMETERS":"CCM",
+  CENTIMETERS:"CMS",CARTONS:"CTN",DOZENS:"DOZ",DRUMS:"DRM","GREAT GROSS":"GGK",
+  GRAMMES:"GMS",GROSS:"GRS","GROSS YARDS":"GYD",KILOGRAMS:"KGS",KILOLITRE:"KLR",
+  KILOMETRE:"KME",LITRES:"LTR",MILILITRE:"MLT",METERS:"MTR","METRIC TON":"MTS",
+  NUMBERS:"NOS",OTHERS:"OTH",PACKS:"PAC",PIECES:"PCS",PAIRS:"PRS",QUINTAL:"QTL",
+  ROLLS:"ROL",SETS:"SET","SQUARE FEET":"SQF","SQUARE METERS":"SQM","SQUARE YARDS":"SQY",
+  TABLETS:"TBS",
+};
+const COUNTRY_CODE = {
+  canada:"CA", germany:"DE", "united states":"US", usa:"US", "united kingdom":"GB",
+  uk:"GB", australia:"AU", france:"FR", india:"IN",
+};
+const DEFAULT_UNIT_NAME = "PIECES";
+
+// ---------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------
+let store = { domestic: null, export: null }; // raw parsed rows per upload
+let invoices = [];
+let allIssues = [];
+
+// ---------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------
+function pad(n){ return String(n).padStart(2, "0"); }
+function round2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+// Official tool truncates taxable value / unit price to 2 decimals (confirmed against its real output)
+function trunc2(n){ return Math.floor(n * 100 + 1e-6) / 100; }
+
+function fmtDate(d){ return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`; }
+function parseDMY(s){
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || "").trim());
+  return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+}
+function excelDateToStr(v){
+  if (v instanceof Date) return fmtDate(v);
+  if (typeof v === "number"){
+    const d = XLSX.SSF.parse_date_code(v);
+    return `${pad(d.d)}/${pad(d.m)}/${d.y}`;
+  }
+  return String(v || "");
+}
+
+// Date rule: invoice date within last 30 days -> keep.
+// Otherwise -> today minus 29 days.
+function applyDateRule(dateStr, todayOverride){
+  const box = document.getElementById("opt-daterule");
+  if (!box || !box.checked) return { date: dateStr, original: null };
+  const d = parseDMY(dateStr);
+  if (!d) return { date: dateStr, original: null };
+  const today = todayOverride ? new Date(todayOverride) : new Date();
+  today.setHours(0,0,0,0);
+  const ageDays = Math.round((today - d) / 86400000);
+  if (ageDays > 30){
+    const nd = new Date(today);
+    nd.setDate(nd.getDate() - 29);
+    return { date: fmtDate(nd), original: dateStr };
+  }
+  return { date: dateStr, original: null };
+}
+
+function snapToSlab(rate){
+  const slabs = [0, 0.25, 3, 5, 12, 18, 28];
+  for (const s of slabs) if (Math.abs(rate - s) < 0.3) return s;
+  return rate;
+}
+function unitCode(name){
+  const n = (name || DEFAULT_UNIT_NAME).toString().trim().toUpperCase();
+  return UNIT_CODE[n] || "PCS";
+}
+
+function val(id){ const el = document.getElementById(id); return el ? String(el.value || "").trim() : ""; }
+function sellerProfile(){
+  return {
+    gstin: val("s-gstin"), legalName: val("s-legal"), addr1: val("s-addr1"),
+    loc: val("s-loc"), state: val("s-state"), pin: val("s-pin"),
+  };
+}
+
+function readSheet(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        // cellDates off: dates stay as Excel serial numbers -> no timezone shifting
+        const wb = XLSX.read(e.target.result, { type:"array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(ws, { defval:"" }));
+      } catch(err){ reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function groupByInvoice(rows){
+  const groups = {};
+  rows.forEach(r => {
+    const inv = r["Invoice number"];
+    if (!inv) return;
+    (groups[inv] = groups[inv] || []).push(r);
+  });
+  return groups;
+}
+
+// ---------------------------------------------------------------------
+// Address helpers (official tool appends city to Addr1, short city in Loc)
+// ---------------------------------------------------------------------
+const CITY_NORMALIZE = { "new delhi": "Delhi" };
+
+function composeBuyerAddress(first){
+  const l1 = String(first["Shipping Address Line 1"] || "").trim();
+  const l2 = String(first["Shipping Address Line 2"] || "").trim();
+  const city = String(first["Shipping Address City"] || "").trim();
+  const hay = (l1 + " " + l2).toLowerCase();
+  let addr1 = l1;
+  if (city && !hay.includes(city.toLowerCase())) addr1 = l1 ? `${l1}, ${city}` : city;
+  const loc = CITY_NORMALIZE[city.toLowerCase()] || city;
+  return { addr1, addr2: l2 || null, loc };
+}
+
+function checkBuyerLengths(invNo, b, issues){
+  if (b.addr1.length > 100) issues.push(`${invNo}: buyer address line 1 is ${b.addr1.length} chars (max 100) — shorten it`);
+  if (!b.addr1) issues.push(`${invNo}: buyer address is empty`);
+  if (b.loc.length < 3) issues.push(`${invNo}: buyer location "${b.loc}" is too short (min 3 chars)`);
+  if (b.loc.length > 50) issues.push(`${invNo}: buyer location is over 50 chars`);
+  if (String(invNo).length > 16) issues.push(`${invNo}: invoice number longer than 16 chars — IRP will reject it`);
+}
+
+// ---------------------------------------------------------------------
+// GST rate: read from the Sales Ledger text ("InState Sales 18%"), cross-checked
+// against (Tax + Additional Tax) / Sales. Tally exports have duplicate Tax/Total
+// columns, so the amount-based figure alone isn't trustworthy.
+// ---------------------------------------------------------------------
+function gstRate(l, rawSales, invNo, lineNo, issues){
+  const m = /(\d+(?:\.\d+)?)\s*%/.exec(String(l["Sales Ledger"] || ""));
+  const fromLedger = m ? parseFloat(m[1]) : null;
+  const fromAmt = rawSales
+    ? snapToSlab(round2(((Number(l["Tax"] || 0) + Number(l["Additional Tax"] || 0)) / rawSales) * 100))
+    : 0;
+  if (fromLedger !== null && Math.abs(fromLedger - fromAmt) > 0.5)
+    issues.push(`${invNo} line ${lineNo}: GST rate in ledger name is ${fromLedger}% but the tax amounts imply ${fromAmt}% — check this line`);
+  return fromLedger !== null ? fromLedger : fromAmt;
+}
+
+// ---------------------------------------------------------------------
+// Export buyer address book: "Customer name => billing address", one per line.
+// Tally only holds the ship-to address; the invoice carries the buyer's billing address.
+// ---------------------------------------------------------------------
+function normName(s){ return String(s || "").toLowerCase().replace(/\s+/g, " ").trim(); }
+function lookupBillingAddress(name){
+  const el = document.getElementById("addr-book");
+  if (!el) return null;
+  const key = normName(name);
+  for (const line of String(el.value || "").split("\n")){
+    const i = line.indexOf("=>");
+    if (i < 0) continue;
+    if (normName(line.slice(0, i)) === key) return line.slice(i + 2).trim() || null;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------
+// Tax type: IGST vs CGST+SGST (from Tally ledger fields, state rule as fallback)
+// ---------------------------------------------------------------------
+function taxType(l, sellerStcd, buyerStcd){
+  const taxLedger = String(l["Tax Ledger"] || "").toUpperCase();
+  const addlLedger = String(l["Additional Tax Ledger"] || "").toUpperCase();
+  if (taxLedger.includes("IGST")) return "IGST";
+  if (addlLedger.includes("CGST") || taxLedger.includes("SGST") || taxLedger.includes("CGST")) return "CGST_SGST";
+  return buyerStcd === sellerStcd ? "CGST_SGST" : "IGST";
+}
+
+// ---------------------------------------------------------------------
+// JSON builders — shape mirrors the official offline tool's output
+// ---------------------------------------------------------------------
+function buildItem(sl, hsn, qty, unitPrice, taxable, rate, sgst, cgst, igst){
+  return {
+    SlNo: String(sl), PrdDesc: null, IsServc: "N", HsnCd: String(hsn || ""),
+    Qty: qty, Unit: unitCode(DEFAULT_UNIT_NAME), UnitPrice: unitPrice,
+    TotAmt: taxable, Discount: 0, PreTaxVal: 0, AssAmt: taxable, GstRt: rate,
+    IgstAmt: igst, CgstAmt: cgst, SgstAmt: sgst,
+    CesRt: 0, CesAmt: 0, CesNonAdvlAmt: 0, StateCesRt: 0, StateCesAmt: 0, StateCesNonAdvlAmt: 0,
+    OthChrg: 0, TotItemVal: round2(taxable + sgst + cgst + igst),
+  };
+}
+
+// Invoice-level totals are whole rupees (official tool behaviour)
+function buildValDtls(items){
+  const sum = (k) => items.reduce((s, i) => s + i[k], 0);
+  const assVal = Math.round(sum("AssAmt"));
+  const igstVal = Math.round(sum("IgstAmt"));
+  const cgstVal = Math.round(sum("CgstAmt"));
+  const sgstVal = Math.round(sum("SgstAmt"));
+  const totInvVal = Math.round(sum("TotItemVal"));
+  // any rupee left over from rounding the parts separately goes to round-off,
+  // so AssVal + taxes + RndOffAmt always equals TotInvVal exactly (0 on the Delhi sample)
+  const rndOff = round2(totInvVal - (assVal + igstVal + cgstVal + sgstVal));
+  return {
+    AssVal: assVal, IgstVal: igstVal, CgstVal: cgstVal, SgstVal: sgstVal,
+    CesVal: 0, StCesVal: 0, Discount: 0, OthChrg: 0, RndOffAmt: rndOff,
+    TotInvVal: totInvVal,
+  };
+}
+
+function buildInvoiceJson({ supType, docNo, docDate, seller, buyer, items, expDtls }){
+  const o = {
+    Version: "1.1",
+    TranDtls: { TaxSch: "GST", SupTyp: supType, IgstOnIntra: "N", RegRev: null, EcmGstin: null },
+    DocDtls: { Typ: "INV", No: String(docNo), Dt: docDate },
+    SellerDtls: {
+      Gstin: seller.gstin, LglNm: seller.legalName, TrdNm: null,
+      Addr1: seller.addr1, Addr2: null, Loc: seller.loc,
+      Pin: Number(seller.pin), Stcd: seller.stcd, Ph: null, Em: null,
+    },
+    BuyerDtls: {
+      Gstin: buyer.gstin, LglNm: buyer.legalName, TrdNm: null, Pos: buyer.pos,
+      Addr1: buyer.addr1, Addr2: buyer.addr2, Loc: buyer.loc,
+      Pin: Number(buyer.pin), Stcd: buyer.stcd, Ph: null, Em: null,
+    },
+    ValDtls: buildValDtls(items),
+    ItemList: items,
+  };
+  if (expDtls) o.ExpDtls = expDtls;
+  return o;
+}
+
+function sellerStateCode(seller){
+  return seller.gstin.slice(0,2) || "06";
+}
+
+// ---------------------------------------------------------------------
+// DOMESTIC
+// ---------------------------------------------------------------------
+function processDomestic(rows){
+  const seller = sellerProfile();
+  const sellerStcd = sellerStateCode(seller);
+  const groups = groupByInvoice(rows);
+  const out = [];
+
+  Object.keys(groups).forEach(invNo => {
+    const lines = groups[invNo];
+    const first = lines[0];
+    const issues = [];
+
+    const buyerStateCode = String(first["Shipping Address State"] || "").trim().toUpperCase();
+    const buyerGstin = String(first["GSTIN Number"] || "").trim();
+    const buyerStcd = buyerGstin.slice(0,2) || STATE_NUM[buyerStateCode] || "";
+    if (!buyerStcd) issues.push(`${invNo}: couldn't determine buyer state code (state="${buyerStateCode}", GSTIN="${buyerGstin}")`);
+    if (!buyerGstin) issues.push(`${invNo}: missing Buyer GSTIN`);
+
+    const items = lines.map((l, i) => {
+      const qty = Number(l["Qty"]) || 0;
+      const rawSales = Number(l["Sales"]) || 0;
+      const taxable = trunc2(rawSales);
+      const rate = gstRate(l, rawSales, invNo, i + 1, issues);
+      const unitPrice = qty ? trunc2(taxable / qty) : 0;
+
+      let sgst = 0, cgst = 0, igst = 0;
+      if (taxType(l, sellerStcd, buyerStcd) === "IGST") igst = round2(taxable * rate / 100);
+      else { cgst = round2(taxable * rate / 200); sgst = cgst; }
+
+      if (!l["HSN Code"]) issues.push(`${invNo} line ${i+1}: missing HSN code`);
+      return buildItem(i+1, l["HSN Code"], qty, unitPrice, taxable, rate, sgst, cgst, igst);
+    });
+
+    const addr = composeBuyerAddress(first);
+    checkBuyerLengths(invNo, addr, issues);
+
+    const dr = applyDateRule(excelDateToStr(first["Date"]));
+    const json = buildInvoiceJson({
+      supType: "B2B", docNo: invNo, docDate: dr.date,
+      seller: { ...seller, stcd: sellerStcd },
+      buyer: {
+        gstin: buyerGstin || "URP", legalName: first["Customer Name"] || "",
+        pos: buyerStcd || "97", addr1: addr.addr1, addr2: addr.addr2, loc: addr.loc,
+        pin: first["Shipping Address Pincode"] || "", stcd: buyerStcd || "97",
+      },
+      items,
+    });
+
+    const v = json.ValDtls;
+    out.push({
+      key: "DOM-" + invNo, supType: "B2B", docNo: invNo, docDate: dr.date, origDate: dr.original,
+      buyer: first["Customer Name"] || "", taxable: v.AssVal,
+      tax: v.IgstVal + v.CgstVal + v.SgstVal, total: v.TotInvVal, json, issues,
+    });
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// EXPORT
+// ---------------------------------------------------------------------
+function processExport(rows){
+  const seller = sellerProfile();
+  const sellerStcd = sellerStateCode(seller);
+  const groups = groupByInvoice(rows);
+  const out = [];
+
+  Object.keys(groups).forEach(invNo => {
+    const lines = groups[invNo];
+    const first = lines[0];
+    const issues = [];
+
+    const items = lines.map((l, i) => {
+      const qty = Number(l["Qty"]) || 0;
+      const taxable = trunc2(Number(l["Total"]) || 0); // zero-tax export: Total is the taxable value
+      const unitPrice = qty ? trunc2(taxable / qty) : 0;
+      if (!l["HSN Code"]) issues.push(`${invNo} line ${i+1}: missing HSN code`);
+      return buildItem(i+1, l["HSN Code"], qty, unitPrice, taxable, 0, 0, 0, 0);
+    });
+
+    const tallyAddr = composeBuyerAddress(first);
+    const billing = lookupBillingAddress(first["Customer Name"]);
+    // official tool shows the buyer's billing address and "OTHER COUNTRIES" as location for exports
+    const addr = billing
+      ? { addr1: billing, addr2: null, loc: "OTHER COUNTRIES" }
+      : { addr1: tallyAddr.addr1, addr2: tallyAddr.addr2, loc: "OTHER COUNTRIES" };
+    if (!billing) issues.push(`${invNo}: buyer address comes from the Tally ship-to ("${tallyAddr.addr1}"). If the invoice should show the buyer's billing address instead, add it to the Export buyer address book.`);
+    checkBuyerLengths(invNo, addr, issues);
+
+    const dr = applyDateRule(excelDateToStr(first["Date"]));
+    const json = buildInvoiceJson({
+      supType: "EXPWOP", docNo: invNo, docDate: dr.date,
+      seller: { ...seller, stcd: sellerStcd },
+      buyer: {
+        gstin: "URP", legalName: first["Customer Name"] || "", pos: "96",
+        addr1: addr.addr1, addr2: addr.addr2, loc: addr.loc, pin: "999999", stcd: "96",
+      },
+      items,
+    });
+
+    const v = json.ValDtls;
+    out.push({
+      key: "EXP-" + invNo, supType: "EXPWOP", docNo: invNo, docDate: dr.date, origDate: dr.original,
+      buyer: first["Customer Name"] || "", taxable: v.AssVal, tax: 0, total: v.TotInvVal, json, issues,
+    });
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------
+function inr(n){ return "₹" + n.toLocaleString("en-IN"); }
+
+function reprocessAll(){
+  try{
+    invoices = [
+      ...(store.domestic ? processDomestic(store.domestic) : []),
+      ...(store.export ? processExport(store.export) : []),
+    ];
+  } catch(err){
+    alert("Couldn't process the file: " + err.message);
+    invoices = [];
+  }
+  render();
+}
+
+function render(){
+  const body = document.getElementById("results-body");
+  const issuesEl = document.getElementById("issues");
+  const resultsSection = document.getElementById("results-section");
+  const emptySection = document.getElementById("empty-section");
+
+  if (!invoices.length){
+    resultsSection.style.display = "none";
+    emptySection.style.display = "block";
+    return;
+  }
+  resultsSection.style.display = "block";
+  emptySection.style.display = "none";
+  document.getElementById("results-count").textContent = `${invoices.length} invoice${invoices.length !== 1 ? "s" : ""}`;
+
+  body.innerHTML = "";
+  invoices.forEach(inv => {
+    const tr = document.createElement("tr");
+    const dateCell = inv.origDate
+      ? `${inv.docDate}<div style="font-size:11px;color:var(--brass);font-family:var(--mono);">was ${inv.origDate}</div>`
+      : inv.docDate;
+    tr.innerHTML = `
+      <td class="num" style="text-align:left; font-family:var(--mono);">${inv.docNo}</td>
+      <td class="tag ${inv.supType === 'B2B' ? 'b2b' : 'exp'}">${inv.supType}</td>
+      <td>${dateCell}</td>
+      <td>${inv.buyer}</td>
+      <td class="num">${inr(inv.taxable)}</td>
+      <td class="num">${inr(inv.tax)}</td>
+      <td class="num">${inr(inv.total)}</td>
+      <td><button class="small ghost">JSON</button></td>
+    `;
+    tr.querySelector("button").addEventListener("click", () => downloadJson(inv.docNo, [inv.json]));
+    body.appendChild(tr);
+  });
+
+  issuesEl.innerHTML = "";
+  allIssues = invoices.flatMap(inv => inv.issues);
+  allIssues.forEach(msg => {
+    const div = document.createElement("div");
+    div.className = "issue";
+    div.textContent = msg;
+    issuesEl.appendChild(div);
+  });
+}
+
+function downloadJson(name, payload){
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${String(name).replace(/[\/\\]/g, "_")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("download-all").addEventListener("click", () => {
+  downloadJson("einvoices", invoices.map(i => i.json));
+});
+
+// ---------------------------------------------------------------------
+// File handling + live reprocessing when settings change
+// ---------------------------------------------------------------------
+async function handleFile(kind, file){
+  document.getElementById(`fn-${kind}`).textContent = file.name;
+  try{
+    store[kind] = await readSheet(file);
+    reprocessAll();
+  } catch(err){
+    alert(`Couldn't read ${file.name}: ${err.message}`);
+  }
+}
+
+["domestic", "export"].forEach(kind => {
+  const input = document.getElementById(`file-${kind}`);
+  const drop = document.getElementById(`drop-${kind}`);
+  input.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(kind, e.target.files[0]); });
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault(); drop.classList.remove("drag");
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(kind, f);
+  });
+});
+
+try{
+  const saved = localStorage.getItem("addrBook");
+  if (saved !== null) document.getElementById("addr-book").value = saved;
+} catch(e){}
+document.getElementById("addr-book").addEventListener("input", () => {
+  try{ localStorage.setItem("addrBook", document.getElementById("addr-book").value); } catch(e){}
+  reprocessAll();
+});
+
+["s-gstin","s-legal","s-addr1","s-loc","s-state","s-pin","opt-daterule"].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("change", reprocessAll);
+});
+
+render();
+
+</script>
+</body>
+</html>
